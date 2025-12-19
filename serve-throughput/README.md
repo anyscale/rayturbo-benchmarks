@@ -35,7 +35,7 @@ Keep a 1:2 ratio between replicas of the Ranker and Ingress Deployment
    ```
    gcloud container clusters create my-benchmark-cluster \
      --location us-central2-b \  # Important: Choose a location with L4 available: https://docs.cloud.google.com/compute/docs/regions-zones/gpu-regions-zones
-     --enable-ray-operator  # Optional, you may install kuberay with helm as well.
+     --addons=RayOperator  # Optional, you may install kuberay with helm instead.
 
    gcloud container node-pools create gpu-pool \
      --cluster my-benchmark-cluster \
