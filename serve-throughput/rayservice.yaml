@@ -1,0 +1,89 @@
+apiVersion: ray.io/v1
+kind: RayService
+metadata:
+  name: throughput-benchmark
+
+spec:
+  serveConfigV2: |
+    applications:
+    - name: app1
+      route_prefix: /
+      import_path: throughput.app:recsys_app
+      runtime_env: {}
+      deployments:
+      - name: ranker_deployment
+        num_replicas: 4
+        max_ongoing_requests: 1000
+        ray_actor_options:
+          num_gpus: 1.0
+      - name: ingress_deployment
+        num_replicas: 8
+        max_ongoing_requests: 1000
+  rayClusterConfig:
+    rayVersion: '2.50.1'
+    headGroupSpec:
+      rayStartParams:
+        dashboard-host: '0.0.0.0'
+        num-cpus: '0'
+      template:
+        spec:
+          nodeSelector:
+            node.kubernetes.io/instance-type: "n2-standard-16"
+          containers:
+          - name: ray-head
+            image: $RAY_IMAGE
+            env:
+            - name: RAY_GRAFANA_IFRAME_HOST
+              value: http://127.0.0.1:3016
+            - name: RAY_GRAFANA_HOST
+              value: http://prometheus-grafana.prometheus-system.svc:80
+            - name: RAY_PROMETHEUS_HOST
+              value: http://prometheus-kube-prometheus-prometheus.prometheus-system.svc:9090
+            resources:
+              requests:
+                cpu: 7
+                memory: 28G
+            volumeMounts:
+            - mountPath: /home/ray/throughput
+              name: throughput
+            ports:
+            - containerPort: 8000
+              name: serve
+            - containerPort: 6379
+              name: gcs-server
+            - containerPort: 8265 # Ray dashboard
+              name: dashboard
+            - containerPort: 10001
+              name: client
+          volumes:
+          - name: throughput
+            configMap:
+              name: serve-throughput-src
+
+    workerGroupSpecs:
+    - replicas: 1
+      groupName: "g2-standard-48"
+      rayStartParams:
+        num-gpus: "1"
+      template:
+        spec:
+          nodeSelector:
+            node.kubernetes.io/instance-type: "g2-standard-48"
+            cloud.google.com/gke-accelerator: nvidia-l4
+          containers:
+          - name: ray-worker
+            image: $RAY_IMAGE
+            resources:
+              limits:
+                nvidia.com/gpu: "4"
+              requests:
+                cpu: 46
+                nvidia.com/gpu: "4"
+                memory: 190G
+            volumeMounts:
+            - mountPath: /home/ray/throughput
+              name: throughput-src
+          volumes:
+          - name: throughput-src
+            configMap:
+              name: serve-throughput-src
